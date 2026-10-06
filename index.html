@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pythagorean Tree Fractal Angle Morphing Art</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen flex flex-col items-center p-4">
+  <h1 class="text-2xl font-bold mb-1 text-emerald-300">Pythagorean Tree Fractal — Angle Morphing Art</h1>
+  <p class="text-gray-400 text-sm mb-4">Recursive squares and triangles with autumn-to-spring color gradient</p>
+
+  <div class="flex flex-col lg:flex-row gap-6 w-full max-w-6xl">
+    <div class="flex-1 flex justify-center">
+      <canvas id="canvas" width="600" height="600"
+        class="rounded-xl border border-emerald-700 bg-black"
+        aria-label="Pythagorean tree fractal canvas"></canvas>
+    </div>
+
+    <div class="lg:w-64 flex flex-col gap-4">
+      <div class="bg-gray-900 rounded-xl p-4 border border-gray-700">
+        <h2 class="text-emerald-400 font-semibold mb-3">Parameters</h2>
+
+        <label class="block text-sm mb-1" for="depthSlider">
+          Depth: <span id="depthVal" class="font-bold text-emerald-300">8</span>
+        </label>
+        <input id="depthSlider" type="range" min="2" max="12" value="8"
+          class="w-full accent-emerald-500" aria-label="Recursion depth 2 to 12" />
+
+        <label class="block text-sm mt-3 mb-1" for="leftAngleSlider">
+          Left Angle: <span id="leftAngleVal" class="font-bold text-emerald-300">45°</span>
+        </label>
+        <input id="leftAngleSlider" type="range" min="0" max="90" value="45"
+          class="w-full accent-emerald-500" aria-label="Left branch angle 0 to 90 degrees" />
+
+        <label class="block text-sm mt-3 mb-1" for="rightAngleSlider">
+          Right Angle: <span id="rightAngleVal" class="font-bold text-emerald-300">45°</span>
+        </label>
+        <input id="rightAngleSlider" type="range" min="0" max="90" value="45"
+          class="w-full accent-emerald-500" aria-label="Right branch angle 0 to 90 degrees" />
+      </div>
+
+      <div class="bg-gray-900 rounded-xl p-4 border border-gray-700">
+        <h2 class="text-emerald-400 font-semibold mb-3">Animation</h2>
+        <button id="animBtn"
+          class="w-full bg-emerald-700 hover:bg-emerald-600 text-white font-semibold py-2 rounded-lg transition"
+          aria-label="Play angle sweep animation">
+          ▶ Play Angle Sweep
+        </button>
+      </div>
+
+      <div class="bg-gray-900 rounded-xl p-4 border border-gray-700">
+        <h2 class="text-emerald-400 font-semibold mb-3">Color Gradient</h2>
+        <div class="text-xs flex flex-col gap-1">
+          <div class="flex items-center gap-2">
+            <span class="inline-block w-4 h-4 rounded" style="background:#7c3f00"></span>
+            <span>Trunk (deep brown)</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="inline-block w-4 h-4 rounded" style="background:#e67e22"></span>
+            <span>Mid (autumn orange)</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="inline-block w-4 h-4 rounded" style="background:#27ae60"></span>
+            <span>Leaves (spring green)</span>
+          </div>
+        </div>
+      </div>
+
+      <button id="downloadBtn"
+        class="w-full bg-teal-700 hover:bg-teal-600 text-white font-semibold py-2 rounded-lg transition"
+        aria-label="Download tree as PNG">
+        ⬇ Download PNG
+      </button>
+    </div>
+  </div>
+
+<script>
+(function() {
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  const depthSlider = document.getElementById('depthSlider');
+  const depthVal = document.getElementById('depthVal');
+  const leftAngleSlider = document.getElementById('leftAngleSlider');
+  const leftAngleVal = document.getElementById('leftAngleVal');
+  const rightAngleSlider = document.getElementById('rightAngleSlider');
+  const rightAngleVal = document.getElementById('rightAngleVal');
+  const animBtn = document.getElementById('animBtn');
+  const downloadBtn = document.getElementById('downloadBtn');
+
+  let animating = false;
+  let animFrame = null;
+  let animT = 0;
+  let maxDepth = 8;
+
+  // Color by depth: trunk=brown, mid=orange, leaves=green
+  function getColor(depth, maxD) {
+    const t = maxD > 0 ? depth / maxD : 0;
+    // trunk: #7c3f00 (124,63,0) → orange: #e67e22 (230,126,34) → green: #27ae60 (39,174,96)
+    let r, g, b;
+    if (t < 0.5) {
+      const s = t * 2;
+      r = Math.round(124 + (230 - 124) * s);
+      g = Math.round(63 + (126 - 63) * s);
+      b = Math.round(0 + (34 - 0) * s);
+    } else {
+      const s = (t - 0.5) * 2;
+      r = Math.round(230 + (39 - 230) * s);
+      g = Math.round(126 + (174 - 126) * s);
+      b = Math.round(34 + (96 - 34) * s);
+    }
+    return `rgb(${r},${g},${b})`;
+  }
+
+  function drawBranch(x, y, size, angle, depth, leftA, rightA, maxD) {
+    if (depth > maxD || size < 0.5) return;
+
+    const t = depth / maxD;
+    const alpha = Math.max(0.1, 1 - t * 0.5);
+    ctx.strokeStyle = getColor(depth, maxD);
+    ctx.fillStyle = getColor(depth, maxD);
+    ctx.globalAlpha = alpha;
+    ctx.lineWidth = Math.max(0.5, (maxD - depth + 1) * 0.5);
+
+    // Draw square at current position
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.beginPath();
+    ctx.rect(0, 0, size, size);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.stroke();
+    ctx.restore();
+
+    const leftRad = leftA * Math.PI / 180;
+    const rightRad = rightA * Math.PI / 180;
+    const leftSize = size * Math.cos(leftRad);
+    const rightSize = size * Math.cos(rightRad);
+
+    // Left branch
+    const lx = x + (Math.cos(angle) * size * Math.sin(leftRad) * Math.cos(leftRad)
+                  - Math.sin(angle) * (size - size * Math.cos(leftRad) * Math.cos(leftRad)));
+    const ly = y + (Math.sin(angle) * size * Math.sin(leftRad) * Math.cos(leftRad)
+                  + Math.cos(angle) * (size - size * Math.cos(leftRad) * Math.cos(leftRad)));
+
+    // Compute corners of square
+    const cos = Math.cos(angle), sin = Math.sin(angle);
+    // top-left corner of current square
+    const tlx = x - sin * size, tly = y + cos * size;
+    // top-right corner
+    const trx = x + cos * size - sin * size, try_ = y + sin * size + cos * size;
+
+    const newAngleLeft = angle - leftRad;
+    const newAngleRight = angle + rightRad;
+
+    drawBranch(tlx, tly, leftSize, newAngleLeft, depth + 1, leftA, rightA, maxD);
+    drawBranch(trx - leftSize * Math.cos(newAngleLeft) + rightSize * Math.cos(newAngleRight),
+               try_ - leftSize * Math.sin(newAngleLeft) + rightSize * Math.sin(newAngleRight),
+               rightSize, newAngleRight, depth + 1, leftA, rightA, maxD);
+
+    ctx.globalAlpha = 1;
+  }
+
+  // Simpler, more robust Pythagorean tree using recursive approach
+  function drawTree(x1, y1, x2, y2, depth, leftA, rightA, maxD) {
+    if (depth > maxD) return;
+
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len < 0.3) return;
+
+    const colorT = maxD > 0 ? depth / maxD : 0;
+    ctx.fillStyle = getColor(depth, maxD);
+    ctx.strokeStyle = getColor(depth, maxD);
+    ctx.lineWidth = Math.max(0.4, (maxD - depth + 1) * 0.6);
+    ctx.globalAlpha = 1;
+
+    // Draw square: base is p1-p2, extend perpendicularly
+    const px = -dy, py = dx; // perpendicular (left)
+    const sq1x = x1, sq1y = y1;
+    const sq2x = x2, sq2y = y2;
+    const sq3x = x2 + px, sq3y = y2 + py;
+    const sq4x = x1 + px, sq4y = y1 + py;
+
+    ctx.beginPath();
+    ctx.moveTo(sq1x, sq1y);
+    ctx.lineTo(sq2x, sq2y);
+    ctx.lineTo(sq3x, sq3y);
+    ctx.lineTo(sq4x, sq4y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Apex of right triangle on top of square
+    // The apex sits above the square's top edge (sq4-sq3)
+    const topMidX = (sq4x + sq3x) / 2;
+    const topMidY = (sq4y + sq3y) / 2;
+
+    const leftRad = leftA * Math.PI / 180;
+    const rightRad = rightA * Math.PI / 180;
+
+    // Rotate top-edge vector by angles to find apex
+    const topDx = sq3x - sq4x;
+    const topDy = sq3y - sq4y;
+    const topLen = Math.sqrt(topDx * topDx + topDy * topDy);
+
+    // Apex: from sq4, at angle leftRad along top direction
+    const apexX = sq4x + topDx * Math.cos(leftRad) * Math.cos(leftRad)
+                        - topDy * Math.cos(leftRad) * Math.sin(leftRad)
+                        - topDx * Math.sin(leftRad) * Math.sin(leftRad)
+                        + topDy * Math.sin(leftRad) * Math.cos(leftRad) * 0;
+    // Simpler: use rotation
+    // Apex from sq4 at angle (top-edge direction rotated by -leftA)
+    const topAngle = Math.atan2(topDy, topDx);
+    const apX = sq4x + topLen * Math.cos(leftRad) * Math.cos(topAngle + Math.PI/2 - leftRad);
+    const apY = sq4y + topLen * Math.cos(leftRad) * Math.sin(topAngle + Math.PI/2 - leftRad);
+
+    // Left child: sq4 → apex
+    drawTree(sq4x, sq4y, apX, apY, depth + 1, leftA, rightA, maxD);
+    // Right child: apex → sq3
+    drawTree(apX, apY, sq3x, sq3y, depth + 1, leftA, rightA, maxD);
+  }
+
+  function render() {
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#050a05';
+    ctx.fillRect(0, 0, W, H);
+
+    const leftA = parseFloat(leftAngleSlider.value);
+    const rightA = parseFloat(rightAngleSlider.value);
+    maxDepth = parseInt(depthSlider.value);
+
+    const baseSize = 60;
+    const baseY = H - 20;
+    const x1 = W / 2 - baseSize / 2;
+    const x2 = W / 2 + baseSize / 2;
+
+    drawTree(x1, baseY, x2, baseY, 0, leftA, rightA, maxDepth);
+  }
+
+  depthSlider.addEventListener('input', () => {
+    depthVal.textContent = depthSlider.value;
+    stopAnim();
+    render();
+  });
+  leftAngleSlider.addEventListener('input', () => {
+    leftAngleVal.textContent = leftAngleSlider.value + '°';
+    stopAnim();
+    render();
+  });
+  rightAngleSlider.addEventListener('input', () => {
+    rightAngleVal.textContent = rightAngleSlider.value + '°';
+    stopAnim();
+    render();
+  });
+
+  function stopAnim() {
+    if (animFrame) cancelAnimationFrame(animFrame);
+    animating = false;
+    animBtn.textContent = '▶ Play Angle Sweep';
+  }
+
+  animBtn.addEventListener('click', () => {
+    if (animating) { stopAnim(); return; }
+    animating = true;
+    animBtn.textContent = '⏹ Stop';
+    animT = 0;
+    function frame() {
+      if (!animating) return;
+      animT += 0.008;
+      const a = (Math.sin(animT) * 0.5 + 0.5) * 80 + 5;
+      const b = (Math.cos(animT * 0.7) * 0.5 + 0.5) * 80 + 5;
+      leftAngleSlider.value = a;
+      leftAngleVal.textContent = Math.round(a) + '°';
+      rightAngleSlider.value = b;
+      rightAngleVal.textContent = Math.round(b) + '°';
+      render();
+      animFrame = requestAnimationFrame(frame);
+    }
+    animFrame = requestAnimationFrame(frame);
+  });
+
+  downloadBtn.addEventListener('click', () => {
+    const link = document.createElement('a');
+    link.download = `pythagorean-tree-d${depthSlider.value}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
